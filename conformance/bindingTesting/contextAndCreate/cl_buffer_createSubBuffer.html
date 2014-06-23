@@ -41,33 +41,46 @@ try {
     debug("(CLenum memFlags, CLuint origin, CLuint sizeInBytes)");
     var wtu = WebCLTestUtils;
     var webCLContext = wtu.createContext();
-    webCLBuffer = wtu.createBuffer(webCLContext, webcl.MEM_READ_WRITE, BUFFER_SIZE);
-    var origin = 0;
+    var webCLBuffer = wtu.createBuffer(webCLContext, webcl.MEM_READ_WRITE, BUFFER_SIZE);
+    var origin = 0, subBufferSize = 10;
 
-    // Testing for creating sub buffer.
-    shouldBeType("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, origin, 10);", WebCLBuffer);
-    shouldBeType("webCLBuffer.createSubBuffer(webcl.MEM_WRITE_ONLY, origin, 10);", WebCLBuffer);
-    shouldBeType("webCLBuffer.createSubBuffer(webcl.MEM_READ_WRITE, origin, 10);", WebCLBuffer);
+    shouldBeType("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, origin, subBufferSize);", WebCLBuffer);
+    shouldBeType("webCLBuffer.createSubBuffer(webcl.MEM_WRITE_ONLY, origin, subBufferSize);", WebCLBuffer);
+    shouldBeType("webCLBuffer.createSubBuffer(webcl.MEM_READ_WRITE, origin, subBufferSize);", WebCLBuffer);
 
-    // Testing for invalid values of origin.
+    // Testing for exceptions.
     var originInvalid = BUFFER_SIZE + 1;
-    shouldThrowExceptionName("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, originInvalid, 10);", "INVALID_VALUE");
+    shouldThrowExceptionName("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, originInvalid, subBufferSize);", "INVALID_VALUE");
 
-    // Testing for invalid values of sizeInBytes.
     var sizeInBytesInvalid = BUFFER_SIZE + 1;
     shouldThrowExceptionName("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, origin, sizeInBytesInvalid);", "INVALID_VALUE");
 
-    // Testing for exceptions.
-    shouldThrowExceptionName("webCLBuffer.createSubBuffer(invalid_CLenum, 0, 10);", "INVALID_VALUE");
+    shouldThrowExceptionName("webCLBuffer.createSubBuffer(invalid_CLenum, origin, subBufferSize);", "INVALID_VALUE");
 
-    var contextDeviceArray = webCLContext.getInfo(webcl.CONTEXT_DEVICES);
-    for (var i = 0; i < contextDeviceArray.length; i++) {
-        var deviceMemAddressAlignment = contextDeviceArray[i].getInfo(webcl.DEVICE_MEM_BASE_ADDR_ALIGN);
-        shouldThrowExceptionName("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, deviceMemAddressAlignment - 1, 1);", "MISALIGNED_SUB_BUFFER_OFFSET");
-    }
+    var webCLBufferRead = wtu.createBuffer(webCLContext, webcl.MEM_READ_ONLY, BUFFER_SIZE);
+    shouldThrowExceptionName("webCLBufferRead.createSubBuffer(webcl.MEM_WRITE_ONLY, origin, subBufferSize);", "INVALID_VALUE");
+    shouldThrowExceptionName("webCLBufferRead.createSubBuffer(webcl.MEM_READ_WRITE, origin, subBufferSize);", "INVALID_VALUE");
+
+    var webCLBufferWrite = wtu.createBuffer(webCLContext, webcl.MEM_WRITE_ONLY, BUFFER_SIZE);
+    shouldThrowExceptionName("webCLBufferWrite.createSubBuffer(webcl.MEM_READ_ONLY, origin, subBufferSize);", "INVALID_VALUE");
+    shouldThrowExceptionName("webCLBufferWrite.createSubBuffer(webcl.MEM_READ_WRITE, origin, subBufferSize);", "INVALID_VALUE");
 
     var webCLSubBuffer = wtu.createSubBuffer(webCLBuffer, webcl.MEM_READ_WRITE, origin, 100);
-    shouldThrowExceptionName("webCLSubBuffer.createSubBuffer(webcl.MEM_READ_WRITE, origin, 10);", "INVALID_MEM_OBJECT");
+    shouldThrowExceptionName("webCLSubBuffer.createSubBuffer(webcl.MEM_READ_WRITE, origin, subBufferSize);", "INVALID_MEM_OBJECT");
+
+    var contextDeviceArray = webCLContext.getInfo(webcl.CONTEXT_DEVICES);
+    var unalignedOrigin = null;
+    if (contextDeviceArray.length > 1) {
+        for (i = 0; i < contextDeviceArray.length - 1; i++) {
+            if (contextDeviceArray[i].getInfo(webcl.DEVICE_MEM_BASE_ADDR_ALIGN) !=
+                contextDeviceArray[i+1].getInfo(webcl.DEVICE_MEM_BASE_ADDR_ALIGN)) {
+                unalignedOrigin = contextDeviceArray[i+1].getInfo(webcl.DEVICE_MEM_BASE_ADDR_ALIGN);
+                break;
+            }
+        }
+        if (unalignedOrigin)
+            shouldThrowExceptionName("webCLBuffer.createSubBuffer(webcl.MEM_READ_ONLY, unalignedOrigin, subBufferSize);", "MISALIGNED_SUB_BUFFER_OFFSET");
+    }
 
 } catch(e) {
     testFailed(e.description);

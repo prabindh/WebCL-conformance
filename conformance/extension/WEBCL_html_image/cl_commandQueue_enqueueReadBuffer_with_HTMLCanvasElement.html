@@ -36,7 +36,8 @@
 <div id="description"></div>
 <div id="console"></div>
 <div style="position:absolute; left:0px; top:0px; visibility:hidden" id="x">
-    <canvas id="inputCanvas" />
+    <canvas id="inputCanvas" width = 200 height = 100/>
+    <canvas id="invalidCanvas" width = 0 height = 0/>
 </div>
 <script>
 try {
@@ -44,12 +45,14 @@ try {
     debug("( WebCLBuffer buffer, CLboolean blockingRead, CLuint bufferOffset, CLuint numBytes, HTMLCanvasElement dstCanvas, optional sequence<WebCLEvent>? eventWaitList, optional WebCLEvent? event)\n");
 
     var wtu = WebCLTestUtils;
-    var webCLContext = wtu.createContext();
     var canvas = document.getElementById("inputCanvas");
-    var webCLCommandQueue = wtu.createCommandQueue(webCLContext);
+    var invalid_canvas = document.getElementById("invalidCanvas");
     var bufferOffset = 0;
     var bufferSize = canvas.width * canvas.height * 4;
     var numBytes = bufferSize;
+
+    var webCLContext = wtu.createContext();
+    var webCLCommandQueue = wtu.createCommandQueue(webCLContext);
 
     var webCLBuffer = wtu.createBuffer(webCLContext, webcl.MEM_READ_WRITE, bufferSize);
     shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBuffer, true, bufferOffset, numBytes, canvas);", "WEBCL_EXTENSION_NOT_ENABLED");
@@ -57,22 +60,47 @@ try {
         throw { description : "Failed to enable extension : WEBCL_html_image. Exitting..." };
     }
 
+    wtu.releaseAll(webCLContext);
+    webCLContext = wtu.createContext();
+    webCLCommandQueue = wtu.createCommandQueue(webCLContext);
+
     // MEM_READ_ONLY Buffers.
     var webCLBufferRead = wtu.createBuffer(webCLContext, webcl.MEM_READ_ONLY, bufferSize);
     shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferRead, true, bufferOffset, numBytes, canvas)");
-    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferRead, false, bufferOffset, numBytes, canvas)");
+    var webCLEvent = new WebCLEvent();
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferRead, false, bufferOffset, numBytes, canvas, [], webCLEvent)");
+    wtu.waitForEvents([webCLEvent]);
 
     // MEM_WRITE_ONLY Buffers.
     var webCLBufferWrite = wtu.createBuffer(webCLContext, webcl.MEM_WRITE_ONLY, bufferSize);
     shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferWrite, true, bufferOffset, numBytes, canvas)");
-    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferWrite, false, bufferOffset, numBytes, canvas)");
+    webCLEvent = new WebCLEvent();
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferWrite, false, bufferOffset, numBytes, canvas, [], webCLEvent)");
+    wtu.waitForEvents([webCLEvent]);
 
     // MEM_READ_WRITE Buffers.
     var webCLBufferReadWrite = wtu.createBuffer(webCLContext, webcl.MEM_READ_WRITE, bufferSize);
     shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas)");
-    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, false, bufferOffset, numBytes, canvas)");
+    webCLEvent = new WebCLEvent();
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, false, bufferOffset, numBytes, canvas, [], webCLEvent)");
+    wtu.waitForEvents([webCLEvent]);
+
+    // Testing for nullable parameters.
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, [])");
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, [], null)");
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, null)");
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, null, null)");
+    webCLEvent = new WebCLEvent();
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, null, webCLEvent)");
+
+    var bufferOffsetNonZero = 10;
+    var numBytesWithOffset = bufferSize - bufferOffsetNonZero;
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffsetNonZero, numBytesWithOffset, canvas)");
+    shouldBeUndefined("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesWithOffset, canvas)");
 
     // Testing for exceptions.
+    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffsetNonZero, numBytes, canvas)", "INVALID_VALUE");
+
     var releasedBuffer = wtu.createBuffer(webCLContext, webcl.MEM_READ_WRITE, bufferSize);
     wtu.release(releasedBuffer);
     shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(releasedBuffer, true, bufferOffset, numBytes, canvas)", "INVALID_MEM_OBJECT");
@@ -82,25 +110,47 @@ try {
     var numBytesInvalid = bufferSize + 1;
     shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas)", "INVALID_VALUE");
 
-    var webCLContextNew = wtu.createContext();
-    var webCLCommandQueueNew = wtu.createCommandQueue(webCLContextNew);
-    var webCLBufferNew = wtu.createBuffer(webCLContextNew, webcl.MEM_READ_ONLY, bufferSize);
-    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferNew, true, bufferOffset, numBytesInvalid, canvas)", "INVALID_CONTEXT");
-    shouldThrowExceptionName("webCLCommandQueueNew.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas)", "INVALID_CONTEXT");
+    // Testing for exception "INVALID_CONTEXT"
+    var webCLPlatform = wtu.getPlatform();
+    var devices = wtu.getDevices(webCLPlatform, webcl.DEVICE_TYPE_ALL);
+    if (devices.length > 1) {
+        var webCLDevice1 = devices[0];
+        var webCLContext1 = wtu.createContext(webCLDevice1);
+        var webCLCommandQueue1 = wtu.createCommandQueue(webCLContext1, webCLDevice1);
+        var webCLBuffer1 = wtu.createBuffer(webCLContext1, webcl.MEM_READ_WRITE, bufferSize);
 
-    var webCLEvent = wtu.createEvent(webCLContext);
-    var webCLEventNew = wtu.createEvent(webCLContextNew);
-    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas, [webCLEventNew], webCLEvent)", "INVALID_CONTEXT");
-    shouldThrowExceptionName("webCLCommandQueueNew.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas, [webCLEvent], webCLEventNew)", "INVALID_CONTEXT");
-    shouldThrowExceptionName("webCLCommandQueueNew.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas, [], webCLEvent)", "INVALID_CONTEXT");
-    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas, [], webCLEventNew)", "INVALID_CONTEXT");
+        var webCLDevice2 = devices[1];
+        var webCLContext2 = wtu.createContext(webCLDevice2);
+        var webCLCommandQueue2 = wtu.createCommandQueue(webCLContext2, webCLDevice2);
+        var webCLBuffer2 = wtu.createBuffer(webCLContext2, webcl.MEM_READ_WRITE, bufferSize);
 
-    var releasedEvent = wtu.createEvent(webCLContext);
+        shouldThrowExceptionName("webCLCommandQueue1.enqueueReadBuffer(webCLBuffer2, true, bufferOffset, numBytes, canvas)", "INVALID_CONTEXT");
+        shouldThrowExceptionName("webCLCommandQueue2.enqueueReadBuffer(webCLBuffer1, true, bufferOffset, numBytes, canvas)", "INVALID_CONTEXT");
+
+        var webCLUserEvent1 = wtu.createUserEvent(webCLContext1);
+        var webCLUserEvent2 = wtu.createUserEvent(webCLContext2);
+        shouldThrowExceptionName("webCLCommandQueue1.enqueueReadBuffer(webCLBuffer1, false, bufferOffset, numBytes, canvas, [webCLUserEvent2])", "INVALID_CONTEXT");
+        shouldThrowExceptionName("webCLCommandQueue2.enqueueReadBuffer(webCLBuffer2, false, bufferOffset, numBytes, canvas, [webCLUserEvent1])", "INVALID_CONTEXT");
+        wtu.setStatus(webCLUserEvent1, webcl.COMPLETE);
+        wtu.setStatus(webCLUserEvent2, webcl.COMPLETE);
+
+        var webCLEvent1 = wtu.createEvent();
+        webCLCommandQueue1.enqueueReadBuffer(webCLBuffer1, true, bufferOffset, numBytes, canvas, [], webCLEvent1);
+        shouldThrowExceptionName("webCLCommandQueue2.enqueueReadBuffer(webCLBuffer2, true, bufferOffset, numBytes, canvas, [webCLEvent1])", "INVALID_CONTEXT");
+        var webCLEvent2 = wtu.createEvent();
+        webCLCommandQueue2.enqueueReadBuffer(webCLBuffer2, true, bufferOffset, numBytes, canvas, [], webCLEvent2);
+        shouldThrowExceptionName("webCLCommandQueue1.enqueueReadBuffer(webCLBuffer1, true, bufferOffset, numBytes, canvas, [webCLEvent2])", "INVALID_CONTEXT");
+    }
+
+    var releasedEvent = wtu.createUserEvent(webCLContext);
     wtu.release(releasedEvent);
-    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas, [releasedEvent], webCLEventNew)", "INVALID_EVENT_WAIT_LIST");
+    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, [releasedEvent])", "INVALID_EVENT_WAIT_LIST");
 
-    wtu.setStatus(webCLEvent, -1);
-    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytesInvalid, canvas, [webCLEvent], webCLEventNew)", "EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST");
+    var webCLUserEvent = wtu.createUserEvent(webCLContext);
+    wtu.setStatus(webCLUserEvent, -1);
+    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, canvas, [webCLUserEvent])", "EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST");
+
+    shouldThrowExceptionName("webCLCommandQueue.enqueueReadBuffer(webCLBufferReadWrite, true, bufferOffset, numBytes, invalid_canvas)", "INVALID_HOST_PTR");
 
 } catch (e) {
     testFailed(e.description);

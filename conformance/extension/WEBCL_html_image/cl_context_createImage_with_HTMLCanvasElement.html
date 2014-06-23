@@ -36,20 +36,26 @@
 <div id="description"></div>
 <div id="console"></div>
 <div style="position:absolute; left:0px; top:0px; visibility:hidden" id="x">
-    <canvas id="inputCanvas" />
+    <canvas id="inputCanvas" width = 200 height = 100/>
+    <canvas id="invalidCanvas" width = 0 height = 0/>
 </div>
 <script>
 try {
     debug("WebCLContext :: createImage with HTMLCanvasElement test case.");
-    debug("(CLenum memFlags, HTMLCanvasElement srcCanvas)");
+    debug("(CLenum memFlags, HTMLCanvasElement srcCanvas)\n");
+
     var wtu = WebCLTestUtils;
     var webCLContext = wtu.createContext();
     var canvas = document.getElementById("inputCanvas");
+    var invalid_canvas = document.getElementById("invalidCanvas");
 
     shouldThrowExceptionName("webCLContext.createImage(webcl.MEM_READ_ONLY, canvas);", "WEBCL_EXTENSION_NOT_ENABLED");
     if (!wtu.enableExtension(webcl, "WEBCL_html_image")) {
         throw { description : "Failed to enable extension : WEBCL_html_image. Exitting..."};
     }
+
+    wtu.releaseAll(webCLContext);
+    webCLContext = wtu.createContext();
 
     shouldBeType("webCLContext.createImage(webcl.MEM_READ_ONLY, canvas);", "WebCLImage");
     shouldBeType("webCLContext.createImage(webcl.MEM_WRITE_ONLY, canvas);", "WebCLImage");
@@ -59,16 +65,25 @@ try {
     shouldThrowExceptionName("webCLContext.createImage(invalid_CLenum, canvas);", "INVALID_VALUE");
     shouldThrowExceptionName("webCLContext.createImage(webcl.MEM_READ_WRITE, invalid_canvas);", "INVALID_HOST_PTR");
 
-    var webCLPlatform = wtu.getPlatform();
-    var webCLDevices = wtu.getDevices(webCLPlatform);
-    var imageWidthMax = webCLDevices[0].getInfo(webcl.DEVICE_IMAGE2D_MAX_WIDTH);
+    var contextDeviceArray = webCLContext.getInfo(webcl.CONTEXT_DEVICES);
+    var contextWidthMax = contextDeviceArray[0].getInfo(webcl.DEVICE_IMAGE2D_MAX_WIDTH);
+    var contextHeightMax = contextDeviceArray[0].getInfo(webcl.DEVICE_IMAGE2D_MAX_HEIGHT);
+    // finding the max value of the DEVICE_IMAGE2D_MAX_WIDTH & DEVICE_IMAGE2D_MAX_HEIGHT for the context devices.
+    for (i = 1; i < contextDeviceArray.length; i++) {
+        var deviceMaxWidth = contextDeviceArray[i].getInfo(webcl.DEVICE_IMAGE2D_MAX_WIDTH);
+        if (deviceMaxWidth > contextWidthMax)
+            contextWidthMax = deviceMaxWidth;
+        var deviceMaxHeight = contextDeviceArray[i].getInfo(webcl.DEVICE_IMAGE2D_MAX_HEIGHT);
+        if (deviceMaxHeight > contextHeightMax)
+            contextHeightMax = deviceMaxHeight;
+    }
+
     var canvasInvalidWidth = document.getElementById("inputCanvas");
-    canvasInvalidWidth.width = imageWidthMax + 1;
+    canvasInvalidWidth.width = contextWidthMax + 1;
     shouldThrowExceptionName("webCLContext.createImage(webcl.MEM_READ_WRITE, canvasInvalidWidth);", "INVALID_IMAGE_SIZE");
 
-    var imageHeightMax = webCLDevices[0].getInfo(webcl.DEVICE_IMAGE2D_MAX_HEIGHT);
     var canvasInvalidHeight = document.getElementById("inputCanvas");
-    canvasInvalidHeight.width = imageHeightMax + 1;
+    canvasInvalidHeight.width = contextHeightMax + 1;
     shouldThrowExceptionName("webCLContext.createImage(webcl.MEM_READ_WRITE, canvasInvalidHeight);", "INVALID_IMAGE_SIZE");
 
 } catch(e) {

@@ -52,7 +52,7 @@ try {
     var bufferOffset = 0;
     var BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * SIZE;
 
-    data = wtu.generateRandomFloat(data, count);
+    wtu.generateRandomFloat(data, count);
     var webCLBufferWithHostPtr = wtu.createBuffer(webCLContext, webcl.MEM_READ_WRITE, BUFFER_SIZE, data);
     wtu.enqueueReadBuffer(webCLCommandQueue, webCLBufferWithHostPtr, true, bufferOffset, BUFFER_SIZE, result);
     wtu.verifyResult(data, result, count, "Validation of data filled by ArrayBufferView on creation of a buffer with size " + SIZE);

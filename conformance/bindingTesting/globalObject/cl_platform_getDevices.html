@@ -43,14 +43,18 @@ try {
     var wtu = WebCLTestUtils;
     var webCLPlatform = wtu.getPlatform();
 
+    shouldBeArrayOfType("webCLPlatform.getDevices();", "WebCLDevice");
     shouldBeTypeOrException("webCLPlatform.getDevices(webcl.DEVICE_TYPE_CPU);", "WebCLDevice", "DEVICE_NOT_FOUND", true);
     shouldBeTypeOrException("webCLPlatform.getDevices(webcl.DEVICE_TYPE_GPU);", "WebCLDevice", "DEVICE_NOT_FOUND", true);
     shouldBeTypeOrException("webCLPlatform.getDevices(webcl.DEVICE_TYPE_ACCELERATOR);", "WebCLDevice", "DEVICE_NOT_FOUND", true);
     shouldBeArrayOfType("webCLPlatform.getDevices(webcl.DEVICE_TYPE_DEFAULT);", "WebCLDevice");
     shouldBeArrayOfType("webCLPlatform.getDevices(webcl.DEVICE_TYPE_ALL);", "WebCLDevice");
 
+    // Testing for equivalence [Specification : Omitting the device type is equivalent to specifying DEVICE_TYPE_ALL.]
+    shouldBe("webCLPlatform.getDevices();", "webCLPlatform.getDevices(webcl.DEVICE_TYPE_ALL);");
+
     // Testing for Exceptions.
-    shouldThrowExceptionName("webCLPlatform.getDevices(invalid_CLenum);", "INVALID_VALUE");
+    shouldThrowExceptionName("webCLPlatform.getDevices(invalid_CLenum);", "INVALID_DEVICE_TYPE");
 
 } catch(e) {
     testFailed(e.description);

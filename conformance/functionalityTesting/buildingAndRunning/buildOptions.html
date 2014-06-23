@@ -68,7 +68,7 @@ try {
      *   Rounds off float value to an int.
      */
 
-    data = wtu.generateRandomFloat(data, count);
+    wtu.generateRandomFloat(data, count);
 
     kernelSource = wtu.readKernel("../../../resources/kernels/options_test_kernel.cl");
 
@@ -96,7 +96,7 @@ try {
             var globalWorkSize = [SIZE];
             var localWorkSize = [webCLKernel.getWorkGroupInfo(webCLDevices[0], webcl.KERNEL_WORK_GROUP_SIZE)];
 
-            wtu.enqueueNDRangeKernel(webCLCommandQueue, webCLKernel, globalWorkSize.length, [], globalWorkSize, localWorkSize);
+            wtu.enqueueNDRangeKernel(webCLCommandQueue, webCLKernel, globalWorkSize.length, null, globalWorkSize, localWorkSize);
 
             wtu.enqueueReadBuffer(webCLCommandQueue, output, true, 0, BUFFER_SIZE, result);
 

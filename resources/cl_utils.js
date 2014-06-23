@@ -29,23 +29,24 @@
 
 var SIZE = 1024;
 var BUFFER_SIZE = Float32Array.BYTES_PER_ELEMENT * SIZE;
-var RECT_WIDTH = 320;
-var RECT_HEIGHT = 240;
-var RECT_AREA = RECT_WIDTH * RECT_HEIGHT;
-var BUFFER_RECT_SIZE = RECT_AREA * Float32Array.BYTES_PER_ELEMENT;
-var WIDTH_STEP = RECT_WIDTH * Float32Array.BYTES_PER_ELEMENT;
+
+if (!window.top.CLGlobalVariables) {
+    if (window.addEventListener)
+        window.addEventListener('load', loadDefault, false);
+    else
+        window.attachEvent('onload', loadDefault);
+}
 
 function loadDefault() {
     var wtu = WebCLTestUtils;
     var webCLPlatform = wtu.getPlatform();
-    var webCLDevices = wtu.getDevices(webCLPlatform);
-    var webCLDevice = webCLDevices[0];
+    var defaultDevice = wtu.getDevices(webCLPlatform, webcl.DEVICE_TYPE_DEFAULT);
 
-    var deviceType = webCLDevice.getInfo(webcl.DEVICE_TYPE);
+    var deviceType = defaultDevice[0].getInfo(webcl.DEVICE_TYPE);
     var type = "";
-    switch(deviceType) {
+    switch (deviceType) {
         case webcl.DEVICE_TYPE_GPU :
-            type = "GPU"
+            type = "GPU";
             break;
         case webcl.DEVICE_TYPE_CPU :
             type = "CPU";
@@ -53,23 +54,14 @@ function loadDefault() {
         case webcl.DEVICE_TYPE_ACCELERATOR :
             type = "ACCELERATOR";
             break;
-        default:
-            type = "Not Supported";
+        default :
+            type = "undefined";
             break;
-     }
-
-     printDefautMessage("1", type);
+    }
+    printDefaultMessage("1", type);
 }
 
-if(typeof window.top.CLGlobalVariables == "undefined") {
-    if(window.addEventListener)
-        window.addEventListener('load', loadDefault, false);
-    else
-        window.attachEvent('onload', loadDefault);
-}
-
-function printDefautMessage(platform, device)
-{
+function printDefaultMessage(platform, device) {
     var iDiv = document.createElement('div');
     iDiv.id = 'message';
     iDiv.setAttribute("style","position: fixed;top: 2%;right: 2%;padding: 10px;font-family: monospace;background: #CCC;border: 1px solid black;");
@@ -90,6 +82,28 @@ var generateData = function(type, size) {
     return data;
 };
 
+var getwebCLPlatform = function() {
+    var gv = window.top.CLGlobalVariables;
+    var selecedPlatformIndex = gv.getInstance().getwebCLPlatformIndex();
+    var selectedPlatform = webcl.getPlatforms()[selecedPlatformIndex];
+    if (selectedPlatform instanceof WebCLPlatform)
+        return selectedPlatform;
+    throw { name : "WebCLException", message : "getwebCLPlatform() failed."};
+};
+
+var getwebCLDevices = function(selectedPlatform) {
+    var gv = window.top.CLGlobalVariables;
+    var selecedDevicesIndex = gv.getInstance().getwebCLDevicesIndex();
+    var devicesArray = selectedPlatform.getDevices(webcl.DEVICE_TYPE_ALL);
+    var selectedDevices = [];
+    for (i = 0; i < selecedDevicesIndex.length; i++)
+        if (selecedDevicesIndex[i] < devicesArray.length)
+            selectedDevices.push(devicesArray[selecedDevicesIndex[i]]);
+    if (selectedDevices.length)
+        return selectedDevices;
+    throw { name : "WebCLException", message : "getwebCLDevices() failed."};
+};
+
 var createContext = function(param1, param2, param3) {
     var gv = window.top.CLGlobalVariables;
     if (arguments.length > 3)
@@ -102,13 +116,14 @@ var createContext = function(param1, param2, param3) {
             webCLContext = eval("webcl.createContext(param1, param2);");
         else if (param1 != undefined) {
             if (param1 instanceof WebGLRenderingContext) {
-                var selectedDevices = gv ? gv.getInstance().getwebCLDevices() :
+                var selectedDevices = gv ? getwebCLDevices(getwebCLPlatform()) :
                     webcl.getPlatforms()[0].getDevices(webcl.DEVICE_TYPE_DEFAULT);
                 webCLContext = eval("webcl.createContext(param1, selectedDevices)");
             } else
                 webCLContext = eval("webcl.createContext(param1);");
         } else if (gv) {
-            var selectedDevices = gv.getInstance().getwebCLDevices();
+            selectedPlatform = getwebCLPlatform();
+            selectedDevices = getwebCLDevices(selectedPlatform);
             webCLContext = eval("webcl.createContext(selectedDevices)");
         } else
             webCLContext = eval("webcl.createContext()");
@@ -139,7 +154,8 @@ var createCommandQueue = function(webCLContext, webCLDevice, properties) {
             webCLCommandQueue = eval("webCLContext.createCommandQueue(webCLDevice, properties)");
         } else {
             if (gv) {
-                var selectedDevices = gv.getInstance().getwebCLDevices();
+                var selectedPlatform = getwebCLPlatform();
+                var selectedDevices = getwebCLDevices(selectedPlatform);
                 var dev = selectedDevices[0];
                 webCLCommandQueue = eval("webCLContext.createCommandQueue(dev)");
             } else {
@@ -202,7 +218,7 @@ var getPlatform = function() {
     var gv = window.top.CLGlobalVariables;
     try {
         if (gv)
-            return gv.getInstance().getwebCLPlatform();
+            return getwebCLPlatform();
         else {
             var webCLPlatforms = eval("webcl.getPlatforms()");
             if (typeof(webCLPlatforms) == 'object' && webCLPlatforms.length)
@@ -221,9 +237,10 @@ var getDevices = function(webCLPlatform, deviceType) {
         if (arguments.length > 1)
             webCLDevices = eval("webCLPlatform.getDevices(deviceType)");
         else {
-            if (gv)
-                return gv.getInstance().getwebCLDevices();
-            else
+            if (gv) {
+                var selectedPlatform = getwebCLPlatform();
+                return getwebCLDevices(selectedPlatform);
+            } else
                 webCLDevices = eval("webCLPlatform.getDevices(webcl.DEVICE_TYPE_DEFAULT)");
         }
         if (typeof(webCLDevices) == 'object' && webCLDevices.length)
@@ -261,7 +278,7 @@ var enqueueNDRangeKernel = function(webCLCommandQueue, webCLKernel, workDim, glo
     try {
         if (typeof(webCLEvent) != 'undefined')
             webCLCommandQueue.enqueueNDRangeKernel(webCLKernel, workDim, globalWorkOffset, globalWorkSize, localWorkSize, eventWaitList, webCLEvent);
-        else if ((typeof(eventWaitList) != 'undefined'))
+        else if (typeof(eventWaitList) != 'undefined')
             webCLCommandQueue.enqueueNDRangeKernel(webCLKernel, workDim, globalWorkOffset, globalWorkSize, localWorkSize, eventWaitList);
         else
             webCLCommandQueue.enqueueNDRangeKernel(webCLKernel, workDim, globalWorkOffset, globalWorkSize, localWorkSize);
@@ -281,7 +298,7 @@ var readKernel = function(file) {
             if (source.length)
                 return source;
         }
-        throw { name : "WebCLException", message : "Failed to read Kernel."};
+        throw {name: "Failed to read Kernel."};
     } catch(e) {
         e.description = "readKernel threw exception : " + e.name;
         throw e;
@@ -314,7 +331,7 @@ var release = function(webCLObject) {
 
 var releaseAll = function(webCLObject) {
     try {
-        if (webCLObject instanceof WebCLContext || Object.getPrototypeOf(webCLObject) == Object.getPrototypeOf(webcl))
+        if (webCLObject instanceof WebCLContext || webCLObject === webcl)
             eval("webCLObject.releaseAll()");
         else
             throw { description : "releaseAll is not defined for " + webCLObject };
@@ -513,20 +530,17 @@ var enqueueCopyImageToBuffer = function(webCLCommandQueue, srcImage, dstBuffer, 
 
 var generateRandomInt = function(data, loopSize) {
     for (i = 0; i < loopSize; i++)
-        data[i] = Math.floor(Math.random() * 10);
-    return data;
+        data[i] = Math.floor(Math.random() * 10) + 1;
 }
 
 var generateRandomFloat = function(data, loopSize) {
     for (i = 0; i < loopSize; i++)
         data[i] = Math.random() * 10;
-    return data;
 }
 
 var generateRandomNumberInRange = function (data, min, max, loopSize) {
     for (i = 0; i < loopSize; i++)
         data[i] = Math.random() * (max - min) + min;
-    return data;
 }
 
 var verifyResult = function(data, result, loopSize, msg) {
@@ -575,6 +589,115 @@ var enableExtension = function(object, extensionName) {
     }
 }
 
+var enqueueMarker = function(webCLCommandQueue, webCLEvent) {
+    try {
+        return webCLCommandQueue.enqueueMarker(webCLEvent);
+    } catch(e) {
+        e.description = "webCLCommandQueue :: enqueueMarker threw exception : " + e.name;
+        throw e;
+    }
+}
+
+var verifyArrayForZeroValues = function(array, arraySize, msg) {
+    try {
+        for (index = 0; index < arraySize; index++) {
+            if (array[index] != 0) {
+                testFailed(msg);
+                return;
+            }
+        }
+        testPassed(msg);
+    } catch(e) {
+        e.description = "Verifying if the array " + array + "is null, threw exception : " + e.name;
+        throw e;
+    }
+}
+
+var getBytesForChannelOrder = function(channelOrder) {
+    switch (channelOrder) {
+        case webcl.R:
+        case webcl.A:
+        case webcl.INTENSITY:
+        case webcl.LUMINANCE:
+            return 1;
+        case webcl.RG:
+        case webcl.RA:
+        case webcl.Rx:
+            return 2;
+        case webcl.RGB:
+        case webcl.RGx:
+            return 3;
+        case webcl.RGBA:
+        case webcl.BGRA:
+        case webcl.ARGB:
+        case webcl.RGBx:
+            return 4;
+    }
+}
+
+var getArrayTypeForChanneltype = function(channelType) {
+    switch (channelType) {
+        case webcl.SNORM_INT8:
+        case webcl.UNORM_INT8:
+        case webcl.SIGNED_INT8:
+        case webcl.UNSIGNED_INT8:
+            return "Uint8Array";
+        case webcl.SNORM_INT16:
+        case webcl.UNORM_INT16:
+        case webcl.SIGNED_INT16:
+        case webcl.UNSIGNED_INT16:
+        case webcl.HALF_FLOAT:
+            return "Uint16Array";
+        case webcl.SIGNED_INT32:
+        case webcl.UNSIGNED_INT32:
+        case webcl.FLOAT:
+            return "Uint32Array";
+        case webcl.UNORM_SHORT_565:
+        case webcl.UNORM_SHORT_555:
+        case webcl.UNORM_INT_101010:
+            throw {description: "getArrayTypeForChanneltype threw exception as " + channelType + " is not supported"};
+    }
+}
+
+var waitForEvents = function(webCLEvents) {
+    try {
+        return webcl.waitForEvents(webCLEvents);
+    } catch (e) {
+        e.description = "webCL :: waitForEvents threw exception : " + e.name;
+        throw e;
+    }
+}
+
+var finish = function(webCLCommandQueue, callback) {
+    try {
+        if (arguments.length > 1)
+            webCLCommandQueue.finish(callback);
+        else
+            webCLCommandQueue.finish();
+    } catch(e) {
+        e.description = "WebCLCommandQueue :: finish threw exception : " + e.name;
+        throw e;
+    }
+}
+
+var setCallback = function(event, commandExecCallbackType, callback)
+{
+    try {
+        return event.setCallback(commandExecCallbackType, callback);
+    } catch(e) {
+        e.description = "WebCLEvent :: setCallback threw exception : " + e.name;
+        throw e;
+    }
+}
+
+var appendPostJSToHTML = function(document)
+{
+    var script = document.createElement('script');
+    script.src = '../../../resources/js-test-post.js';
+    script.type = 'text/javascript';
+    document.getElementsByTagName('head')[0].appendChild(script);
+}
+
 return {
 createContext:createContext,
 createProgram:createProgram,
@@ -615,6 +738,14 @@ getSupportedExtensions:getSupportedExtensions,
 setStatus:setStatus,
 getArgInfo:getArgInfo,
 enableExtension:enableExtension,
+enqueueMarker:enqueueMarker,
+getBytesForChannelOrder:getBytesForChannelOrder,
+getArrayTypeForChanneltype:getArrayTypeForChanneltype,
+verifyArrayForZeroValues:verifyArrayForZeroValues,
+waitForEvents:waitForEvents,
+finish:finish,
+setCallback:setCallback,
+appendPostJSToHTML:appendPostJSToHTML,
 none:false
 };
 }());

@@ -3,3 +3,7 @@ createProgram.html
 createKernelsInProgram.html
 createBufferValidation.html
 createImageValidation.html
+createCommandQueue.html
+createSampler.html
+createBuffer.html
+createImage.html

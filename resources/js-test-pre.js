@@ -85,6 +85,12 @@ function reportTestResultsToHarness(success, msg) {
   }
 }
 
+function getTestCaseCount() {
+    if (window.parent.webclTestHarness) {
+        return window.parent.webclTestHarness.getPage(window.location.pathname);
+    }
+}
+
 function notifyFinishedToHarness() {
   if (window.parent.webclTestHarness) {
     window.parent.webclTestHarness.notifyFinished(window.location.pathname);
@@ -122,13 +128,21 @@ function escapeHTML(text)
 function testPassed(msg)
 {
     reportTestResultsToHarness(true, msg);
-    debug('<span><span class="pass">PASS</span> ' + escapeHTML(msg) + '</span>');
+    var tid = getTestCaseCount();
+    if (tid)
+        debug(tid + " : " + '<span><span class="pass">PASS</span> ' + escapeHTML(msg) + '</span>');
+    else
+        debug('<span><span class="pass">PASS</span> ' + escapeHTML(msg) + '</span>');
 }
 
 function testFailed(msg)
 {
     reportTestResultsToHarness(false, msg);
-    debug('<span><span class="fail">FAIL</span> ' + escapeHTML(msg) + '</span>');
+    var tid = getTestCaseCount();
+    if (tid)
+        debug(tid + " : " + '<span><span class="fail">FAIL</span> ' + escapeHTML(msg) + '</span>');
+    else
+        debug('<span><span class="fail">FAIL</span> ' + escapeHTML(msg) + '</span>');
 }
 
 function areArraysEqual(_a, _b)
@@ -411,31 +425,22 @@ function shouldThrow(_a, _e)
     testFailed(_a + " should throw " + (typeof _e == "undefined" ? "an exception" : _ev) + ". Was " + _av + ".");
 }
 
-function shouldBeType(_a, _type, quite) {
+function shouldBeType(_a, _type, quiet) {
     var exception;
     var _av, _avPrototype;
 
-    /*  operator instanceof works based on prototype.constructor. Across multiple frames the
-        constructor definition need not be the same. Thus when running the test in iframe it fails for
-        certain type checks.
-        As a workaround we are comparing prototype of _a and _type
-        after evaluating respective strings.
-    */
-
     try {
         _av = eval(_a);
-        _aPrototype = Object.getPrototypeOf(_av).toString();
     } catch (e) {
         exception = e;
     }
 
     var _typev = eval(_type);
-    var _typePrototype = _typev.prototype.toString();
 
     if (exception)
         testFailed(_a + "should be an instance of " + _type + ". But threw exception " + exception.name);
-    else if (_av instanceof  _typev || _aPrototype == _typePrototype) {
-        if (!quite)
+    else if (_av instanceof  _typev) {
+        if (!quiet)
             testPassed(_a + " is an instance of " + _type);
     } else
         testFailed(_a + " is not an instance of " + _type);
@@ -505,10 +510,6 @@ function finishTest() {
 // WebCL specific methods.
 
 var invalid_CLenum = 9999;
-var invalid_canvas = document.createElement('canvas');
-var invalid_imageData = invalid_canvas.getContext("2d").createImageData(100,100);
-var invalid_image = new Image();
-invalid_image.src = "http://www.khronos.org/registry/webcl/resources/WebCL_logo.png";
 var invalid_video = document.createElement('video');
 
 function shouldThrowExceptionName(_a, _e)
@@ -537,7 +538,7 @@ function shouldThrowExceptionName(_a, _e)
         testFailed(_a + " should throw " + _e + ". Threw " + exception.name + ".");
 }
 
-function shouldBeArrayOfType(_a, _type, quite)
+function shouldBeArrayOfType(_a, _type)
 {
     var exception;
     var _av;
@@ -567,7 +568,7 @@ function shouldBeArrayOfType(_a, _type, quite)
     }
 }
 
-function shouldBeTypeOrException(_a, _type, _e, isArray, quite)
+function shouldBeTypeOrException(_a, _type, _e, isArray, quiet)
 {
     if (typeof _a != "string" || typeof _type != "string" || typeof _e != "string")
         debug("WARN: shouldBe() expects string arguments");
@@ -576,27 +577,21 @@ function shouldBeTypeOrException(_a, _type, _e, isArray, quite)
     var _av;
     try {
         _av = eval(_a);
-        _aPrototype = Object.getPrototypeOf(_av).toString();
     } catch (e) {
         exception = e;
     }
 
     var _typev = eval(_type);
-    var _typePrototype = _typev.prototype.toString();
 
     if (exception) {
-        var isStrict = window.top.CLGlobalVariables ? window.top.CLGlobalVariables.getInstance().isStrict() : 0;
-        if (exception instanceof WebCLException) {
-            if (isStrict && exception.name != _e)
-                testFailed(_a + " should throw " + _e + ". Threw " + exception.name + ".");
-            else
-                testPassed(_a + " threw exception " + exception.name + ".");
-        } else
-            testFailed(_a + " threw exception " + exception.message);
+        if (exception instanceof WebCLException && exception.name == _e)
+            testPassed(_a + " threw exception " + exception.name + ".");
+        else
+            testFailed(_a + " threw exception " + exception.name);
     } else if (isArray)
        shouldBeArrayOfType(_a, _type);
-    else if (_av instanceof  _typev || _aPrototype == _typePrototype) {
-        if (!quite)
+    else if (_av instanceof  _typev) {
+        if (!quiet)
             testPassed(_a + " is an instance of " + _type);
     } else
         testFailed(_a + " is not an instance of " + _type);
@@ -621,4 +616,47 @@ function shouldContainString(_a, _b)
         testPassed(_a + " contains string " + _b);
     else
         testFailed(_a + " should contain the string " + _b + " (of type " + typeof _b + "). Was " + _av + " (of type " + typeof _av + ").");
+}
+
+function shouldThrowTypeError(_a)
+{
+    if (typeof _a != "string")
+        debug("WARN: shouldBe() expects string arguments");
+
+    var exception;
+    var _av;
+    try {
+        _av = eval(_a);
+    } catch (e) {
+        exception = e;
+    }
+
+    if (exception) {
+        if (exception.name == "TypeError")
+            testPassed(_a + "threw type error");
+        else
+            testFailed(_a + "should throw type error but threw " + exception.name);
+    } else
+        testFailed(_a + "should throw type error but was " + _av);
+}
+
+function shouldBeValueOrUndefined(_a, _b)
+{
+    if (typeof _a != "string" || typeof _b != "string")
+        debug("WARN: shouldBeValueOrUndefined() expects string arguments");
+    var exception;
+    var _av;
+    try {
+        _av = eval(_a);
+    } catch (e) {
+        exception = e;
+    }
+    var _bv = eval(_b);
+
+    if (exception)
+        testFailed(_a + " should be " + _bv + " or undefined. Threw exception " + exception.name);
+    else if (typeof _av == "undefined")
+        testPassed(_a + " is undefined.");
+    else
+        shouldBe(_a, _b);
 }

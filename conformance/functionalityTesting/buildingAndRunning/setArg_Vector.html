@@ -39,7 +39,7 @@
 
 /* Generic function to run a "kernel" which copies the input values "inputArray" into a output buffer.
    Later verify the values read from the output buffer into a "resultArray" against "inputArray". */
-var runAndTest = function(commandqueue, kernel, inputArray, resultArray)
+var runAndTest = function(commandqueue, kernel, inputArray, resultArray, ulongFlag)
 {
     try {
         var kernelName = kernel.getInfo(webcl.KERNEL_FUNCTION_NAME);
@@ -52,13 +52,15 @@ var runAndTest = function(commandqueue, kernel, inputArray, resultArray)
         wtu.setArg(kernel, 1, output);
 
         var globalWorkSize = [1024];
-        wtu.enqueueNDRangeKernel(commandqueue, kernel, globalWorkSize.length, [], globalWorkSize, []);
+        wtu.enqueueNDRangeKernel(commandqueue, kernel, globalWorkSize.length, null, globalWorkSize, null);
         wtu.enqueueReadBuffer(commandqueue, output, true, 0, resultArray.BYTES_PER_ELEMENT * resultArray.length, resultArray);
 
+        if(ulongFlag == undefined)
+            ulongFlag = 0;
         var flag = true, resultString = "";
         for (y = 0; y < resultArray.length; y++) {
             resultString = resultString + resultArray[y] + ", ";
-            if (resultArray[y].toPrecision(2) != inputArray[y].toPrecision(2)) {
+            if (resultArray[y].toPrecision(2) != (inputArray[y] + ulongFlag).toPrecision(2)) {
                 flag = false;
                 break;
             }
@@ -121,7 +123,7 @@ var runForAlltypes = function(vectorSize, kernelSource)
         input = wtu.generateData(Uint32Array, vectorSize * 2);
         results = new Uint32Array(vectorSize * 2);
         webCLKernel = webCLProgram.createKernel("kernelULong");
-        runAndTest(webCLCommandQueue, webCLKernel, input, results);
+        runAndTest(webCLCommandQueue, webCLKernel, input, results, 1);
 
         webCLKernel = webCLProgram.createKernel("kernelFloat");
         inputArray = wtu.generateData(Float32Array, vectorSize);
@@ -144,23 +146,23 @@ try {
     webCLContext = wtu.createContext();
     webCLCommandQueue = wtu.createCommandQueue(webCLContext);
 
-    var kernelSource = wtu.readKernel("../../../resources/kernels/setArg_vector2.cl");
+    var kernelSource = wtu.readKernel("../../../resources/kernels/setArg_Vector2.cl");
     runForAlltypes(2, kernelSource);
 
-    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_vector3.cl");
+    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_Vector3.cl");
     runForAlltypes(3, kernelSource);
 
-    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_vector4.cl");
+    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_Vector4.cl");
     runForAlltypes(4, kernelSource);
 
-    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_vector8.cl");
+    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_Vector8.cl");
     runForAlltypes(8, kernelSource);
 
-    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_vector16.cl");
+    kernelSource = wtu.readKernel("../../../resources/kernels/setArg_Vector16.cl");
     runForAlltypes(16, kernelSource);
 
 } catch (e) {
-    testFailed("WebCLKernel setArg() basic test throws exception: " + e.description);
+    testFailed("WebCLKernel setArg() vector test throws exception: " + e.description);
 }
 
 
